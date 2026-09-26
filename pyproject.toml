@@ -1,0 +1,28 @@
+[project]
+name = "puzzle-portrait"
+version = "0.1.0"
+description = "Generate word-search mosaics from portrait images"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "Pillow",
+]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+puzzle-portrait = "puzzle_portrait.cli:main"
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+]
+
+[tool.setuptools.packages.find]
+include = ["puzzle_portrait*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
