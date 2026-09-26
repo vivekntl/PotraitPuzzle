@@ -52,8 +52,18 @@ Print width, height, color mode, and aspect ratio for an image (the file is not 
 python -m puzzle_portrait info path\to\portrait.png
 ```
 
-Crop a photograph to a centered square, resize it to 100×100, and save it under `output/`:
+Crop a photograph to a centered square, resize it to 100×100, and save a full-color preview plus a quantized comparison image under `output/`:
 
 ```powershell
 python -m puzzle_portrait preview path\to\portrait.png
+python -m puzzle_portrait preview path\to\portrait.png --colors 24
+```
+
+Supported `--colors` values: 8, 16, 24, 32, 48 (default: 16).
+
+Render a color-cell mosaic PNG (no letters yet). Cell size is configurable; `--grid-lines` adds a subtle divider:
+
+```powershell
+python -m puzzle_portrait render path\to\portrait.png
+python -m puzzle_portrait render path\to\portrait.png --cell-size 12 --grid-lines --colors 24
 ```
