@@ -2,8 +2,16 @@
 
 from puzzle_portrait.grid.cell import Cell
 from puzzle_portrait.grid.color import RGB
+from puzzle_portrait.grid.combine import MosaicGrid, combine_grids
 from puzzle_portrait.grid.mosaic import Grid
 
 ColorGrid = Grid
 
-__all__ = ["Cell", "ColorGrid", "Grid", "RGB"]
+__all__ = [
+    "Cell",
+    "ColorGrid",
+    "Grid",
+    "MosaicGrid",
+    "RGB",
+    "combine_grids",
+]

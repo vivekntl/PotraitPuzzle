@@ -28,6 +28,8 @@ def test_grid_from_image_matches_dimensions_and_pixel_colors() -> None:
     assert grid[0, 0].column == 0
     assert grid[1, 2].row == 1
     assert grid[1, 2].column == 2
+    assert grid[0, 0].character is None
+    assert grid[1, 2].character is None
 
 
 def test_grid_from_image_converts_grayscale_to_rgb() -> None:

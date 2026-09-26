@@ -64,3 +64,61 @@ def test_render_does_not_modify_grid() -> None:
 
     assert grid[0, 0].color == RGB(255, 0, 0)
     assert grid[1, 1].color == RGB(255, 255, 0)
+
+
+def _center_has_color(image: PILImage, color: tuple[int, int, int], box: int = 8) -> bool:
+    cx, cy = image.size[0] // 2, image.size[1] // 2
+    for y in range(cy - box, cy + box + 1):
+        for x in range(cx - box, cx + box + 1):
+            if image.getpixel((x, y)) == color:
+                return True
+    return False
+
+
+def test_render_draws_letter_in_cell_center() -> None:
+    grid = ColorGrid(1, 1, color=RGB(0, 0, 0))
+    grid.set_character(0, 0, "A")
+
+    image = render_color_grid(
+        grid,
+        cell_size=32,
+        font_size=20,
+        text_color=RGB(255, 255, 255),
+        auto_text_color=False,
+    )
+
+    assert _center_has_color(image, (255, 255, 255))
+    assert image.getpixel((0, 0)) == (0, 0, 0)
+
+
+def test_render_can_skip_letters() -> None:
+    grid = ColorGrid(1, 1, color=RGB(0, 128, 0))
+    grid.set_character(0, 0, "A")
+
+    image = render_color_grid(grid, cell_size=16, draw_letters=False)
+
+    assert image.getpixel((8, 8)) == (0, 128, 0)
+
+
+def test_render_uses_single_text_color() -> None:
+    grid = ColorGrid(2, 1, color=RGB(0, 0, 0))
+    grid.set_character(0, 0, "X")
+    grid.set_character(0, 1, "Y")
+
+    image = render_color_grid(
+        grid,
+        cell_size=32,
+        font_size=18,
+        text_color=RGB(255, 0, 0),
+        auto_text_color=False,
+    )
+
+    left = image.crop((0, 0, 32, 32))
+    right = image.crop((32, 0, 64, 32))
+    assert _center_has_color(left, (255, 0, 0))
+    assert _center_has_color(right, (255, 0, 0))
+
+
+def test_render_rejects_non_positive_font_size() -> None:
+    with pytest.raises(ValueError, match="font_size"):
+        render_color_grid(_sample_grid(), font_size=0)

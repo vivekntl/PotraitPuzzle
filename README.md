@@ -67,3 +67,9 @@ Render a color-cell mosaic PNG (no letters yet). Cell size is configurable; `--g
 python -m puzzle_portrait render path\to\portrait.png
 python -m puzzle_portrait render path\to\portrait.png --cell-size 12 --grid-lines --colors 24
 ```
+
+Build two mosaics from a photo and a word list: color tiles only, then the same tiles with letters:
+
+```powershell
+python -m puzzle_portrait mosaic path\to\portrait.png CAT DOG BIRD --grid-lines
+```

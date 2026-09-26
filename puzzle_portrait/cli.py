@@ -8,9 +8,11 @@ from puzzle_portrait.config import (
     COLOR_COUNTS,
     DEFAULT_CELL_SIZE,
     DEFAULT_COLOR_COUNT,
+    DEFAULT_FONT_SIZE,
     DEFAULT_OUTPUT_DIR,
 )
 from puzzle_portrait.export import save_image
+from puzzle_portrait.grid import combine_grids
 from puzzle_portrait.image import (
     grid_from_image,
     image_info,
@@ -19,6 +21,7 @@ from puzzle_portrait.image import (
     quantize_colors,
 )
 from puzzle_portrait.render import render_color_grid
+from puzzle_portrait.wordsearch import generate_word_search
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -81,6 +84,53 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Draw a subtle line between cells",
     )
+
+    mosaic_parser = subparsers.add_parser(
+        "mosaic",
+        help="Build a color mosaic and a letter mosaic from a photo and word list.",
+    )
+    mosaic_parser.add_argument("image", type=Path, help="Path to the input photograph")
+    mosaic_parser.add_argument(
+        "words",
+        nargs="+",
+        help="Words to place in the word-search",
+    )
+    mosaic_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=DEFAULT_OUTPUT_DIR,
+        help="Directory for the mosaic PNGs (default: output)",
+    )
+    mosaic_parser.add_argument(
+        "--colors",
+        type=int,
+        choices=COLOR_COUNTS,
+        default=DEFAULT_COLOR_COUNT,
+        help=f"Palette size (default: {DEFAULT_COLOR_COUNT})",
+    )
+    mosaic_parser.add_argument(
+        "--cell-size",
+        type=int,
+        default=DEFAULT_CELL_SIZE,
+        help=f"Pixel size of each square cell (default: {DEFAULT_CELL_SIZE})",
+    )
+    mosaic_parser.add_argument(
+        "--grid-lines",
+        action="store_true",
+        help="Draw a subtle line between cells",
+    )
+    mosaic_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for word placement and filler (default: 42)",
+    )
+    mosaic_parser.add_argument(
+        "--font-size",
+        type=int,
+        default=DEFAULT_FONT_SIZE,
+        help=f"Letter size in pixels (default: {DEFAULT_FONT_SIZE})",
+    )
     return parser
 
 
@@ -123,14 +173,52 @@ def main(argv: list[str] | None = None) -> int:
         print(quantized_path)
         return 0
 
-    mosaic = render_color_grid(
-        grid_from_image(quantized),
+    if args.command == "render":
+        mosaic = render_color_grid(
+            grid_from_image(quantized),
+            cell_size=args.cell_size,
+            grid_lines=args.grid_lines,
+        )
+        mosaic_path = save_image(
+            mosaic,
+            args.output_dir / f"{args.image.stem}_mosaic.png",
+        )
+        print(mosaic_path)
+        return 0
+
+    color_grid = grid_from_image(quantized)
+    words = [word.upper() for word in args.words]
+    puzzle = generate_word_search(
+        color_grid.width,
+        color_grid.height,
+        words,
+        seed=args.seed,
+    )
+    if puzzle.failed_words:
+        print("Failed to place: " + ", ".join(puzzle.failed_words), file=sys.stderr)
+
+    combined = combine_grids(color_grid, puzzle.grid)
+    plain = render_color_grid(
+        combined,
         cell_size=args.cell_size,
         grid_lines=args.grid_lines,
+        draw_letters=False,
     )
-    mosaic_path = save_image(
-        mosaic,
+    lettered = render_color_grid(
+        combined,
+        cell_size=args.cell_size,
+        grid_lines=args.grid_lines,
+        draw_letters=True,
+        font_size=args.font_size,
+    )
+    plain_path = save_image(
+        plain,
         args.output_dir / f"{args.image.stem}_mosaic.png",
     )
-    print(mosaic_path)
+    lettered_path = save_image(
+        lettered,
+        args.output_dir / f"{args.image.stem}_mosaic_letters.png",
+    )
+    print(plain_path)
+    print(lettered_path)
     return 0

@@ -45,7 +45,24 @@ class Grid:
         row, column = self._unpack(key)
         if not isinstance(color, RGB):
             raise TypeError(f"Cell color must be RGB, got {type(color).__name__}")
-        self._cells[row][column] = Cell(row=row, column=column, color=color)
+        existing = self._cells[row][column]
+        self._cells[row][column] = Cell(
+            row=row,
+            column=column,
+            color=color,
+            character=existing.character,
+        )
+
+    def set_character(self, row: int, column: int, character: str | None) -> None:
+        """Set the optional letter on a cell without changing its color."""
+        row, column = self._unpack((row, column))
+        existing = self._cells[row][column]
+        self._cells[row][column] = Cell(
+            row=row,
+            column=column,
+            color=existing.color,
+            character=character,
+        )
 
     def _unpack(self, key: tuple[int, int]) -> tuple[int, int]:
         if not isinstance(key, tuple) or len(key) != 2:
