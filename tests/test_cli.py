@@ -98,12 +98,20 @@ def test_cli_mosaic_saves_plain_and_lettered_pngs(tmp_path: Path, capsys) -> Non
 
     plain_path = tmp_path / "sample_mosaic.png"
     lettered_path = tmp_path / "sample_mosaic_letters.png"
+    plain_svg = tmp_path / "sample_mosaic.svg"
+    lettered_svg = tmp_path / "sample_mosaic_letters.svg"
     captured = capsys.readouterr()
     assert exit_code == 0
     assert plain_path.is_file()
     assert lettered_path.is_file()
+    assert plain_svg.is_file()
+    assert lettered_svg.is_file()
+    assert (tmp_path / "sample_mosaic_letters_regular.svg").is_file()
     assert str(plain_path) in captured.out
     assert str(lettered_path) in captured.out
+    assert str(plain_svg) in captured.out
+    assert str(lettered_svg) in captured.out
+    assert 'viewBox="0 0 300 300"' in lettered_svg.read_text(encoding="utf-8")
 
     with Image.open(plain_path) as plain, Image.open(lettered_path) as lettered:
         assert plain.size == (300, 300)

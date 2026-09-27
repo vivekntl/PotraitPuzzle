@@ -1,6 +1,7 @@
+import pytest
 from PIL import Image
 
-from puzzle_portrait.image import crop_to_aspect_ratio
+from puzzle_portrait.image import crop_region, crop_to_aspect_ratio
 
 
 def _unique_image(width: int, height: int) -> Image.Image:
@@ -49,3 +50,19 @@ def test_crop_does_not_modify_source_or_resize() -> None:
     assert cropped.size[0] <= 12
     assert cropped.size[1] <= 8
     assert cropped.size != source.size
+
+
+def test_crop_region_returns_requested_box() -> None:
+    source = _unique_image(10, 8)
+    cropped = crop_region(source, 2, 1, 4, 3)
+
+    assert cropped.size == (4, 3)
+    assert cropped.tobytes() == source.crop((2, 1, 6, 4)).tobytes()
+    assert source.size == (10, 8)
+
+
+def test_crop_region_rejects_box_outside_image() -> None:
+    source = _unique_image(6, 6)
+
+    with pytest.raises(ValueError, match="outside"):
+        crop_region(source, 4, 0, 4, 2)

@@ -10,18 +10,45 @@ from puzzle_portrait.config import (
     DEFAULT_CELL_SIZE,
     DEFAULT_FONT_SIZE,
     DEFAULT_FONT_WEIGHT,
+    FONT_WEIGHTS,
 )
 from puzzle_portrait.grid import ColorGrid, RGB
 from puzzle_portrait.render.contrast import (
     DARK_TEXT,
     LIGHT_TEXT,
-    contrasting_text_color,
+    resolve_text_color_mode,
+    text_color_for_tile,
 )
 
 SUBTLE_GRID_LINE = RGB(48, 48, 48)
 DEFAULT_TEXT_COLOR = DARK_TEXT
 
-_BOLD_WEIGHTS = frozenset({"bold", "700", "800", "900"})
+_WEIGHT_ALIASES = {
+    "normal": "regular",
+    "400": "regular",
+    "500": "medium",
+    "600": "semibold",
+    "demibold": "semibold",
+    "demi-bold": "semibold",
+    "700": "bold",
+    "800": "bold",
+    "900": "bold",
+}
+_WEIGHT_STEMS: dict[str, tuple[str, ...]] = {
+    "medium": ("md", "med", "-Medium", " Medium", "_Medium"),
+    "semibold": (
+        "sb",
+        "semibd",
+        "-SemiBold",
+        "-Semibold",
+        " SemiBold",
+        "_SemiBold",
+        "demibd",
+        "-DemiBold",
+        " DemiBold",
+    ),
+    "bold": ("bd", "b", "-Bold", " Bold", "_Bold"),
+}
 
 FontType = FreeTypeFont | BitmapFont
 
@@ -38,6 +65,7 @@ def render_color_grid(
     font_weight: str = DEFAULT_FONT_WEIGHT,
     text_color: RGB = DEFAULT_TEXT_COLOR,
     auto_text_color: bool = True,
+    text_color_mode: str | None = None,
     light_text_color: RGB = LIGHT_TEXT,
     dark_text_color: RGB = DARK_TEXT,
 ) -> PILImage:
@@ -77,7 +105,7 @@ def render_color_grid(
             font_size,
             font_weight,
             text_color,
-            auto_text_color,
+            resolve_text_color_mode(text_color_mode, auto_text_color),
             light_text_color,
             dark_text_color,
         )
@@ -96,7 +124,7 @@ def _draw_letters(
     font_size: int,
     font_weight: str,
     text_color: RGB,
-    auto_text_color: bool,
+    text_color_mode: str,
     light_text_color: RGB,
     dark_text_color: RGB,
 ) -> None:
@@ -108,14 +136,13 @@ def _draw_letters(
             cell = grid[row, column]
             if not cell.character:
                 continue
-            if auto_text_color:
-                chosen = contrasting_text_color(
-                    cell.color,
-                    light=light_text_color,
-                    dark=dark_text_color,
-                )
-            else:
-                chosen = text_color
+            chosen = text_color_for_tile(
+                cell.color,
+                text_color_mode,
+                custom=text_color,
+                light=light_text_color,
+                dark=dark_text_color,
+            )
             fill = (chosen.red, chosen.green, chosen.blue)
             cx = column * cell_size + cell_size / 2
             cy = row * cell_size + cell_size / 2
@@ -133,27 +160,42 @@ def _load_font(
         except TypeError:
             return ImageFont.load_default()
 
-    path = _resolve_font_path(Path(font), weight)
+    path = resolve_font_path(Path(font), weight)
     if not path.is_file():
         raise FileNotFoundError(f"Font not found: {path}")
     return ImageFont.truetype(str(path), size=size)
 
 
-def _resolve_font_path(path: Path, weight: str) -> Path:
-    if weight.lower() not in _BOLD_WEIGHTS:
+def resolve_font_path(path: Path, weight: str) -> Path:
+    """Return a same-family file for ``weight``, or ``path`` if none exists."""
+    key = _WEIGHT_ALIASES.get(weight.lower(), weight.lower())
+    if key in {"regular", "normal"}:
         return path
 
-    candidates = (
-        path.with_stem(f"{path.stem}bd"),
-        path.with_stem(f"{path.stem}b"),
-        path.with_stem(f"{path.stem}-Bold"),
-        path.with_stem(f"{path.stem} Bold"),
-        path.with_stem(f"{path.stem}_Bold"),
-    )
-    for candidate in candidates:
+    for suffix in _WEIGHT_STEMS.get(key, ()):
+        candidate = path.with_stem(f"{path.stem}{suffix}")
         if candidate.is_file():
             return candidate
     return path
+
+
+def available_font_weights(font: str | Path | None) -> tuple[str, ...]:
+    """Return Regular plus any Medium/SemiBold/Bold files that exist for ``font``."""
+    if font is None:
+        return ("regular",)
+    path = Path(font)
+    if not path.is_file():
+        return ("regular",)
+
+    found = ["regular"]
+    regular = path.resolve()
+    for weight in FONT_WEIGHTS:
+        if weight == "regular":
+            continue
+        resolved = resolve_font_path(path, weight)
+        if resolved.is_file() and resolved.resolve() != regular:
+            found.append(weight)
+    return tuple(found)
 
 
 def _draw_grid_lines(

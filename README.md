@@ -73,3 +73,9 @@ Build two mosaics from a photo and a word list: color tiles only, then the same 
 ```powershell
 python -m puzzle_portrait mosaic path\to\portrait.png CAT DOG BIRD --grid-lines
 ```
+
+Open the desktop app (placeholder controls and preview):
+
+```powershell
+python -m puzzle_portrait.ui
+```

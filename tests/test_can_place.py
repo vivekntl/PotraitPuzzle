@@ -103,3 +103,13 @@ def test_can_place_rejects_empty_word() -> None:
     grid = LetterGrid(3, 3)
 
     assert not can_place(grid, "", 1, 1, RIGHT)
+
+
+def test_can_place_accepts_a_phrase_with_a_space() -> None:
+    grid = LetterGrid(12, 1)
+
+    assert can_place(grid, "SOMEONE COOL", 0, 0, RIGHT)
+    grid[0, 7] = " "
+    assert can_place(grid, "SOMEONE COOL", 0, 0, RIGHT)
+    grid[0, 7] = "X"
+    assert not can_place(grid, "SOMEONE COOL", 0, 0, RIGHT)

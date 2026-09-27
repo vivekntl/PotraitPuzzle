@@ -6,12 +6,22 @@ from pathlib import Path
 
 from puzzle_portrait.config import (
     COLOR_COUNTS,
+    DEFAULT_ALLOW_BACKWARDS,
+    DEFAULT_ALLOW_PHRASES,
+    DEFAULT_BALANCE_DIRECTIONS,
     DEFAULT_CELL_SIZE,
     DEFAULT_COLOR_COUNT,
+    DEFAULT_DIAGONAL_WEIGHT,
+    DEFAULT_FILL_EMPTY,
     DEFAULT_FONT_SIZE,
+    DEFAULT_HORIZONTAL_WEIGHT,
     DEFAULT_OUTPUT_DIR,
+    DEFAULT_SPREAD_RATE,
+    DEFAULT_SPREAD_WORDS,
+    DEFAULT_VERTICAL_WEIGHT,
+    mosaic_letters_svg_filename,
 )
-from puzzle_portrait.export import save_image
+from puzzle_portrait.export import save_image, save_svg
 from puzzle_portrait.grid import combine_grids
 from puzzle_portrait.image import (
     grid_from_image,
@@ -20,8 +30,16 @@ from puzzle_portrait.image import (
     make_preview,
     quantize_colors,
 )
-from puzzle_portrait.render import render_color_grid
-from puzzle_portrait.wordsearch import generate_word_search
+from puzzle_portrait.render import (
+    available_font_weights,
+    render_color_grid,
+    render_color_grid_svg,
+)
+from puzzle_portrait.wordsearch import (
+    direction_weights_from_axes,
+    generate_word_search,
+    placement_directions,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -131,6 +149,60 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_FONT_SIZE,
         help=f"Letter size in pixels (default: {DEFAULT_FONT_SIZE})",
     )
+    mosaic_parser.add_argument(
+        "--spread-words",
+        action=argparse.BooleanOptionalAction,
+        default=DEFAULT_SPREAD_WORDS,
+        help="Place early words near the center and later words farther out (default: on)",
+    )
+    mosaic_parser.add_argument(
+        "--spread-rate",
+        type=float,
+        default=DEFAULT_SPREAD_RATE,
+        help="How quickly later words move away from the center (default: 1)",
+    )
+    mosaic_parser.add_argument(
+        "--balance-directions",
+        action=argparse.BooleanOptionalAction,
+        default=DEFAULT_BALANCE_DIRECTIONS,
+        help="Discourage packing most words on the same axis (default: off)",
+    )
+    mosaic_parser.add_argument(
+        "--horizontal-weight",
+        type=float,
+        default=DEFAULT_HORIZONTAL_WEIGHT,
+        help="Relative weight for left/right words (default: 1)",
+    )
+    mosaic_parser.add_argument(
+        "--vertical-weight",
+        type=float,
+        default=DEFAULT_VERTICAL_WEIGHT,
+        help="Relative weight for up/down words (default: 1)",
+    )
+    mosaic_parser.add_argument(
+        "--diagonal-weight",
+        type=float,
+        default=DEFAULT_DIAGONAL_WEIGHT,
+        help="Relative weight for diagonal words (default: 1)",
+    )
+    mosaic_parser.add_argument(
+        "--allow-phrases",
+        action=argparse.BooleanOptionalAction,
+        default=DEFAULT_ALLOW_PHRASES,
+        help="Place a quoted phrase such as 'someone cool' as one entry (default: off)",
+    )
+    mosaic_parser.add_argument(
+        "--fill-empty",
+        action=argparse.BooleanOptionalAction,
+        default=DEFAULT_FILL_EMPTY,
+        help="Fill leftover tiles with random letters (default: on)",
+    )
+    mosaic_parser.add_argument(
+        "--allow-backwards",
+        action=argparse.BooleanOptionalAction,
+        default=DEFAULT_ALLOW_BACKWARDS,
+        help="Also place words right-to-left and bottom-to-top (default: off)",
+    )
     return parser
 
 
@@ -188,11 +260,23 @@ def main(argv: list[str] | None = None) -> int:
 
     color_grid = grid_from_image(quantized)
     words = [word.upper() for word in args.words]
+    weights = direction_weights_from_axes(
+        args.horizontal_weight,
+        args.vertical_weight,
+        args.diagonal_weight,
+    )
     puzzle = generate_word_search(
         color_grid.width,
         color_grid.height,
         words,
+        directions=placement_directions(allow_backwards=args.allow_backwards),
         seed=args.seed,
+        spread_words=args.spread_words,
+        spread_rate=args.spread_rate,
+        balance_directions=args.balance_directions,
+        direction_weights=weights,
+        fill_empty=args.fill_empty,
+        allow_phrases=args.allow_phrases,
     )
     if puzzle.failed_words:
         print("Failed to place: " + ", ".join(puzzle.failed_words), file=sys.stderr)
@@ -219,6 +303,41 @@ def main(argv: list[str] | None = None) -> int:
         lettered,
         args.output_dir / f"{args.image.stem}_mosaic_letters.png",
     )
+    plain_svg_path = save_svg(
+        render_color_grid_svg(
+            combined,
+            cell_size=args.cell_size,
+            grid_lines=args.grid_lines,
+            draw_letters=False,
+        ),
+        args.output_dir / f"{args.image.stem}_mosaic.svg",
+    )
+    lettered_svg_path = save_svg(
+        render_color_grid_svg(
+            combined,
+            cell_size=args.cell_size,
+            grid_lines=args.grid_lines,
+            draw_letters=True,
+            font_size=args.font_size,
+        ),
+        args.output_dir / f"{args.image.stem}_mosaic_letters.svg",
+    )
     print(plain_path)
     print(lettered_path)
+    print(plain_svg_path)
+    print(lettered_svg_path)
+    for weight in available_font_weights(None):
+        weight_path = save_svg(
+            render_color_grid_svg(
+                combined,
+                cell_size=args.cell_size,
+                grid_lines=args.grid_lines,
+                draw_letters=True,
+                font_size=args.font_size,
+                font_weight=weight,
+            ),
+            args.output_dir
+            / f"{args.image.stem}_{mosaic_letters_svg_filename(weight)}",
+        )
+        print(weight_path)
     return 0
