@@ -12,7 +12,7 @@ from puzzle_portrait.config import (
     DEFAULT_CELL_SIZE,
     DEFAULT_COLOR_COUNT,
     DEFAULT_DIAGONAL_WEIGHT,
-    DEFAULT_FILL_EMPTY,
+    DEFAULT_FILL_PERCENT,
     DEFAULT_FONT_SIZE,
     DEFAULT_HORIZONTAL_WEIGHT,
     DEFAULT_OUTPUT_DIR,
@@ -192,10 +192,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Place a quoted phrase such as 'someone cool' as one entry (default: off)",
     )
     mosaic_parser.add_argument(
-        "--fill-empty",
-        action=argparse.BooleanOptionalAction,
-        default=DEFAULT_FILL_EMPTY,
-        help="Fill leftover tiles with random letters (default: on)",
+        "--fill-percent",
+        type=int,
+        default=DEFAULT_FILL_PERCENT,
+        metavar="N",
+        help="Percent of leftover tiles to fill with random letters (0-100, default: 100)",
     )
     mosaic_parser.add_argument(
         "--allow-backwards",
@@ -275,7 +276,7 @@ def main(argv: list[str] | None = None) -> int:
         spread_rate=args.spread_rate,
         balance_directions=args.balance_directions,
         direction_weights=weights,
-        fill_empty=args.fill_empty,
+        fill_percent=args.fill_percent,
         allow_phrases=args.allow_phrases,
     )
     if puzzle.failed_words:

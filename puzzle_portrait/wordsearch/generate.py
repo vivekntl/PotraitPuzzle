@@ -9,9 +9,14 @@ from puzzle_portrait.wordsearch.directions import (
     Direction,
     normalize_direction_weights,
 )
-from puzzle_portrait.wordsearch.fill import fill_empty_random
+from puzzle_portrait.wordsearch.fill import fill_empty_random, resolve_fill_percent
 from puzzle_portrait.wordsearch.letter_grid import LetterGrid
-from puzzle_portrait.wordsearch.placement import Placement, _valid_placements, place_word
+from puzzle_portrait.wordsearch.placement import (
+    Placement,
+    _valid_placements,
+    can_place,
+    place_word,
+)
 from puzzle_portrait.wordsearch.score import (
     axis_counts,
     choose_scored_placement,
@@ -19,6 +24,7 @@ from puzzle_portrait.wordsearch.score import (
     score_placement,
     uses_placement_scoring,
 )
+from puzzle_portrait.wordsearch.word_list import WordSpec, parse_word_line
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,7 +46,8 @@ def generate_word_search(
     spread_words: bool = False,
     balance_directions: bool = False,
     direction_weights: Mapping[Direction, float] | None = None,
-    fill_empty: bool = True,
+    fill_empty: bool | None = None,
+    fill_percent: int | None = None,
     allow_phrases: bool = True,
     spread_rate: float = 1.0,
 ) -> WordSearch:
@@ -57,14 +64,18 @@ def generate_word_search(
     With scoring off, the seeded choice is the original uniform pick. With
     scoring on, the same seed still produces the same puzzle.
 
-    ``allow_phrases`` keeps entries that contain spaces as one placement.
-    ``fill_empty`` writes random letters into leftover cells.
+    ``allow_phrases`` keeps unpinned entries that contain spaces as one
+    placement. A line may end with ``{{row, col}, DIRECTION}`` to pin the
+    first letter; pinned entries are placed before unpinned ones and skip
+    random choice. ``fill_percent`` (0–100) is the share of leftover tiles
+    filled with random letters. ``fill_empty`` is the older on/off form.
     """
     allowed = tuple(directions)
     if not allowed:
         raise ValueError("At least one direction is required")
     if spread_rate < 0:
         raise ValueError(f"Spread rate must be zero or positive, got {spread_rate}")
+    percent = resolve_fill_percent(fill_percent, fill_empty)
     scoring_weights = None
     if direction_weights:
         for weight in direction_weights.values():
@@ -89,13 +100,39 @@ def generate_word_search(
         direction_weights=direction_weights,
     )
 
-    for word in words:
+    specs: list[WordSpec] = []
+    for raw in words:
+        try:
+            specs.append(parse_word_line(raw))
+        except ValueError:
+            failed_words.append(str(raw).strip() or str(raw))
+
+    for spec in specs:
+        if spec.row is None or spec.column is None or spec.direction is None:
+            continue
+        if not can_place(grid, spec.word, spec.row, spec.column, spec.direction):
+            failed_words.append(spec.source)
+            continue
+        place_word(grid, spec.word, spec.row, spec.column, spec.direction)
+        placements.append(
+            Placement(
+                word=spec.word,
+                row=spec.row,
+                column=spec.column,
+                direction=spec.direction,
+            )
+        )
+
+    for spec in specs:
+        if spec.is_pinned():
+            continue
+        word = spec.word
         if not allow_phrases and _contains_whitespace(word):
-            failed_words.append(word)
+            failed_words.append(spec.source)
             continue
         candidates = _valid_placements(grid, word, allowed)
         if not candidates:
-            failed_words.append(word)
+            failed_words.append(spec.source)
             continue
 
         if scoring:
@@ -122,8 +159,7 @@ def generate_word_search(
         place_word(grid, chosen.word, chosen.row, chosen.column, chosen.direction)
         placements.append(chosen)
 
-    if fill_empty:
-        fill_empty_random(grid, rng=rng)
+    fill_empty_random(grid, rng=rng, percent=percent)
 
     return WordSearch(
         grid=grid,

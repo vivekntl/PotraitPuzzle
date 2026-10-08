@@ -59,7 +59,7 @@ class ProjectSettings:
     text_color_mode: str = "automatic"
     custom_text_color: tuple[int, int, int] = (20, 20, 20)
     allow_phrases: bool = True
-    fill_empty: bool = True
+    fill_percent: int = 100
     allow_backwards: bool = True
 
 
@@ -189,11 +189,21 @@ def settings_from_dict(data: dict[str, Any]) -> ProjectSettings:
         text_color_mode=str(data.get("text_color_mode") or "automatic"),
         custom_text_color=_rgb_tuple(data.get("custom_text_color"), (20, 20, 20)),
         allow_phrases=bool(data["allow_phrases"]) if "allow_phrases" in data else True,
-        fill_empty=bool(data["fill_empty"]) if "fill_empty" in data else True,
+        fill_percent=_fill_percent_from_dict(data),
         allow_backwards=(
             bool(data["allow_backwards"]) if "allow_backwards" in data else True
         ),
     )
+
+
+def _fill_percent_from_dict(data: dict[str, Any]) -> int:
+    if "fill_percent" in data:
+        percent = int(data["fill_percent"])
+    elif "fill_empty" in data:
+        percent = 100 if data["fill_empty"] else 0
+    else:
+        percent = 100
+    return max(0, min(100, percent))
 
 
 def _rgb_tuple(value: Any, default: tuple[int, int, int]) -> tuple[int, int, int]:
@@ -258,7 +268,7 @@ def _settings_to_payload(
         "spread_rate": settings.spread_rate,
         "balance_directions": settings.balance_directions,
         "allow_phrases": settings.allow_phrases,
-        "fill_empty": settings.fill_empty,
+        "fill_percent": settings.fill_percent,
         "allow_backwards": settings.allow_backwards,
         "direction_weights": {
             "horizontal": settings.horizontal_weight,

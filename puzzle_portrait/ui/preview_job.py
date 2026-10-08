@@ -36,7 +36,7 @@ class PreviewSettings:
     balance_directions: bool
     direction_weights: Mapping[Direction, float] | None
     directions: Sequence[Direction]
-    fill_empty: bool
+    fill_percent: int
     allow_phrases: bool
     tile_size: int
     font: str | None
@@ -46,7 +46,13 @@ class PreviewSettings:
     text_color: RGB
 
 
-def render_preview(source_image: PILImage, settings: PreviewSettings) -> PILImage:
+@dataclass(frozen=True, slots=True)
+class PreviewResult:
+    image: PILImage
+    failed_words: tuple[str, ...]
+
+
+def render_preview(source_image: PILImage, settings: PreviewSettings) -> PreviewResult:
     """Crop, place letters, and render a lettered mosaic from a settings snapshot."""
     cropped = crop_region(
         source_image,
@@ -65,7 +71,7 @@ def render_preview(source_image: PILImage, settings: PreviewSettings) -> PILImag
         "text_color": settings.text_color,
     }
     try:
-        return render_color_grid(
+        image = render_color_grid(
             combined,
             cell_size=settings.tile_size,
             draw_letters=True,
@@ -75,7 +81,7 @@ def render_preview(source_image: PILImage, settings: PreviewSettings) -> PILImag
             **style,
         )
     except (OSError, FileNotFoundError):
-        return render_color_grid(
+        image = render_color_grid(
             combined,
             cell_size=settings.tile_size,
             draw_letters=True,
@@ -83,6 +89,7 @@ def render_preview(source_image: PILImage, settings: PreviewSettings) -> PILImag
             grid_lines=True,
             **style,
         )
+    return PreviewResult(image=image, failed_words=puzzle.failed_words)
 
 
 def _word_search(settings: PreviewSettings) -> WordSearch:
@@ -97,17 +104,16 @@ def _word_search(settings: PreviewSettings) -> WordSearch:
             spread_rate=settings.spread_rate,
             balance_directions=settings.balance_directions,
             direction_weights=settings.direction_weights,
-            fill_empty=settings.fill_empty,
+            fill_percent=settings.fill_percent,
             allow_phrases=settings.allow_phrases,
         )
     grid = LetterGrid(settings.columns, settings.rows)
-    if settings.fill_empty:
-        fill_empty_random(grid, seed=settings.seed)
+    fill_empty_random(grid, seed=settings.seed, percent=settings.fill_percent)
     return WordSearch(grid=grid, placements=(), failed_words=())
 
 
 class PreviewWorker(QThread):
-    preview_ready = Signal(object, int)
+    preview_ready = Signal(object, int, object)
     preview_failed = Signal(str, int)
 
     def __init__(
@@ -123,8 +129,8 @@ class PreviewWorker(QThread):
 
     def run(self) -> None:
         try:
-            image = render_preview(self._source_image, self._settings)
+            result = render_preview(self._source_image, self._settings)
         except (OSError, ValueError) as exc:
             self.preview_failed.emit(str(exc), self._request_id)
             return
-        self.preview_ready.emit(image, self._request_id)
+        self.preview_ready.emit(result.image, self._request_id, result.failed_words)

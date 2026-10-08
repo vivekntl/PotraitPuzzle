@@ -1,8 +1,8 @@
 """Convert and display images in the preview panel without altering the source."""
 
 from PIL.Image import Image as PILImage
-from PySide6.QtCore import QRect, Qt, QTimer
-from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPixmap, QResizeEvent
+from PySide6.QtCore import QPoint, QRect, Qt, QTimer
+from PySide6.QtGui import QColor, QImage, QMouseEvent, QPainter, QPen, QPixmap, QResizeEvent
 from PySide6.QtWidgets import QFrame, QLabel, QWidget
 
 
@@ -88,12 +88,31 @@ class FitPreview(QLabel):
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setObjectName("previewPlaceholder")
         self._working = WorkingOverlay(self)
+        self._columns = 0
+        self._rows = 0
+        self._show_cell_hover = False
+        self._hover_label = QLabel(self)
+        self._hover_label.setObjectName("cellHoverLabel")
+        self._hover_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._hover_label.setStyleSheet(
+            "QLabel#cellHoverLabel {"
+            " background: rgba(20, 20, 20, 210);"
+            " color: white;"
+            " padding: 2px 8px;"
+            " border-radius: 4px;"
+            " font-size: 12px;"
+            "}"
+        )
+        self._hover_label.hide()
 
     def clear_preview(self) -> None:
         self._source = QPixmap()
+        self._columns = 0
+        self._rows = 0
         self.setPixmap(QPixmap())
         self.setText(self._placeholder)
         self.set_working(False)
+        self._hover_label.hide()
 
     @property
     def source_pixmap(self) -> QPixmap:
@@ -109,12 +128,79 @@ class FitPreview(QLabel):
         else:
             self._working.stop()
 
-    def set_source_image(self, image: PILImage) -> None:
+    def set_show_cell_hover(self, enabled: bool) -> None:
+        self._show_cell_hover = enabled
+        self.setMouseTracking(enabled)
+        if not enabled:
+            self._hover_label.hide()
+
+    def shows_cell_hover(self) -> bool:
+        return self._show_cell_hover
+
+    def set_source_image(
+        self,
+        image: PILImage,
+        *,
+        columns: int,
+        rows: int,
+    ) -> None:
         self._source = pil_to_qpixmap(image)
+        self._columns = max(0, columns)
+        self._rows = max(0, rows)
         self.setText("")
         self._fit_to_panel()
         self._working.setGeometry(self.rect())
         self._working.raise_()
+        self._hover_label.hide()
+
+    def cell_at(self, pos: QPoint) -> tuple[int, int] | None:
+        """Return ``(row, column)`` for a widget position, or None if off-grid."""
+        if self._columns < 1 or self._rows < 1 or self._source.isNull():
+            return None
+        rect = self._pixmap_rect()
+        if rect.width() < 1 or rect.height() < 1:
+            return None
+        local_x = pos.x() - rect.x()
+        local_y = pos.y() - rect.y()
+        if local_x < 0 or local_y < 0 or local_x >= rect.width() or local_y >= rect.height():
+            return None
+        column = min(self._columns - 1, int(local_x * self._columns / rect.width()))
+        row = min(self._rows - 1, int(local_y * self._rows / rect.height()))
+        return row, column
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        self._update_hover(event.position().toPoint())
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        self._hover_label.hide()
+        super().leaveEvent(event)
+
+    def _update_hover(self, pos: QPoint) -> None:
+        if not self._show_cell_hover:
+            self._hover_label.hide()
+            return
+        cell = self.cell_at(pos)
+        if cell is None:
+            self._hover_label.hide()
+            return
+        row, column = cell
+        self._hover_label.setText(f"{row}, {column}")
+        self._hover_label.adjustSize()
+        x = min(pos.x() + 12, max(0, self.width() - self._hover_label.width()))
+        y = min(pos.y() + 12, max(0, self.height() - self._hover_label.height()))
+        self._hover_label.move(x, y)
+        self._hover_label.show()
+        self._hover_label.raise_()
+
+    def _pixmap_rect(self) -> QRect:
+        pixmap = self.pixmap()
+        if pixmap is None or pixmap.isNull():
+            return QRect()
+        area = self.contentsRect()
+        x = area.x() + (area.width() - pixmap.width()) // 2
+        y = area.y() + (area.height() - pixmap.height()) // 2
+        return QRect(x, y, pixmap.width(), pixmap.height())
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)

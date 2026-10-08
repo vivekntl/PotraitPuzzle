@@ -1,6 +1,8 @@
 from puzzle_portrait.wordsearch import (
     EMPTY,
     LetterGrid,
+    RIGHT,
+    fill_count,
     fill_empty_random,
     generate_word_search,
 )
@@ -54,3 +56,39 @@ def test_generate_word_search_fills_every_empty_cell() -> None:
             row = placement.row + offset * placement.direction.d_row
             column = placement.column + offset * placement.direction.d_column
             assert puzzle.grid[row, column] == letter
+
+
+def test_fill_empty_random_percent_zero_leaves_empties() -> None:
+    grid = LetterGrid(4, 1)
+    grid[0, 0] = "A"
+
+    fill_empty_random(grid, seed=3, percent=0)
+
+    assert grid[0, 0] == "A"
+    assert _all_cells(grid).count(EMPTY) == 3
+
+
+def test_fill_empty_random_percent_fills_that_share() -> None:
+    grid = LetterGrid(10, 1)
+
+    fill_empty_random(grid, seed=8, percent=50)
+
+    filled = sum(1 for cell in _all_cells(grid) if cell != EMPTY)
+    assert filled == fill_count(10, 50)
+    assert filled == 5
+
+
+def test_generate_word_search_respects_fill_percent() -> None:
+    puzzle = generate_word_search(
+        5,
+        1,
+        ["HI"],
+        directions=(RIGHT,),
+        seed=0,
+        fill_percent=0,
+    )
+
+    letters = [puzzle.grid[0, column] for column in range(5)]
+    assert letters.count("H") == 1
+    assert letters.count("I") == 1
+    assert letters.count(EMPTY) == 3

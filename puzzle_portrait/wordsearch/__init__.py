@@ -21,7 +21,7 @@ from puzzle_portrait.wordsearch.directions import (
     normalize_direction_weights,
     placement_directions,
 )
-from puzzle_portrait.wordsearch.fill import fill_empty_random
+from puzzle_portrait.wordsearch.fill import fill_count, fill_empty_random, resolve_fill_percent
 from puzzle_portrait.wordsearch.generate import WordSearch, generate_word_search
 from puzzle_portrait.wordsearch.letter_grid import EMPTY, LetterGrid
 from puzzle_portrait.wordsearch.placement import (
@@ -47,6 +47,11 @@ from puzzle_portrait.wordsearch.verify import (
     find_word,
     verify_words,
 )
+from puzzle_portrait.wordsearch.word_list import (
+    PINNED_DIRECTIONS,
+    WordSpec,
+    parse_word_line,
+)
 
 __all__ = [
     "BACKWARD_DIRECTIONS",
@@ -71,20 +76,25 @@ __all__ = [
     "normalize_direction_weights",
     "placement_directions",
     "LetterGrid",
+    "PINNED_DIRECTIONS",
     "Placement",
     "VerificationReport",
     "WordResult",
     "WordSearch",
+    "WordSpec",
     "can_place",
     "center_out_score",
     "distance_from_center",
+    "fill_count",
     "fill_empty_random",
+    "resolve_fill_percent",
     "find_word",
     "generate_word_search",
     "place_word",
     "place_word_randomly",
     "placement_cells",
     "placement_centroid",
+    "parse_word_line",
     "placement_middle_letter",
     "score_placement",
     "spatial_score",

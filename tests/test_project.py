@@ -87,7 +87,7 @@ def test_save_project_writes_config_words_input_and_outputs(tmp_path: Path) -> N
     assert payload["outputs"]["mosaic_letters_svg"] == MOSAIC_LETTERS_SVG_FILENAME
     assert payload["outputs"]["mosaic_letters_svgs"]["bold"] == "mosaic_letters_bold.svg"
     assert payload["allow_phrases"] is True
-    assert payload["fill_empty"] is True
+    assert payload["fill_percent"] == 100
     assert payload["allow_backwards"] is True
 
 
@@ -150,7 +150,7 @@ def test_settings_from_dict_reads_nested_crop_and_outputs() -> None:
     assert settings.spread_rate == 1.0
     assert settings.balance_directions is False
     assert settings.allow_phrases is True
-    assert settings.fill_empty is True
+    assert settings.fill_percent == 100
     assert settings.allow_backwards is True
 
 
@@ -171,7 +171,7 @@ def test_settings_from_dict_reads_placement_scoring() -> None:
             "spread_rate": 2.5,
             "balance_directions": True,
             "allow_phrases": False,
-            "fill_empty": False,
+            "fill_percent": 40,
             "allow_backwards": False,
             "direction_weights": {
                 "horizontal": 0.5,
@@ -185,8 +185,28 @@ def test_settings_from_dict_reads_placement_scoring() -> None:
     assert settings.spread_rate == 2.5
     assert settings.balance_directions is True
     assert settings.allow_phrases is False
-    assert settings.fill_empty is False
+    assert settings.fill_percent == 40
     assert settings.allow_backwards is False
     assert settings.horizontal_weight == 0.5
     assert settings.vertical_weight == 2
     assert settings.diagonal_weight == 1.5
+
+
+def test_settings_from_dict_maps_old_fill_empty_flag() -> None:
+    settings = settings_from_dict(
+        {
+            "image": "input.jpg",
+            "words": ["HI"],
+            "seed": 3,
+            "color_count": 8,
+            "crop": {"x": 0, "y": 1, "width": 4, "height": 5},
+            "columns": 6,
+            "rows": 7,
+            "tile_size": 8,
+            "font": "Calibri",
+            "font_size": 11,
+            "fill_empty": False,
+        }
+    )
+
+    assert settings.fill_percent == 0

@@ -102,6 +102,9 @@ class CollapsibleSection(QWidget):
     def title(self) -> str:
         return self._toggle.text()
 
+    def set_title(self, title: str) -> None:
+        self._toggle.setText(title)
+
     def is_expanded(self) -> bool:
         return self._toggle.isChecked()
 

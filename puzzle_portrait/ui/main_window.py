@@ -39,7 +39,7 @@ from puzzle_portrait.config import (
     DEFAULT_ALLOW_PHRASES,
     DEFAULT_BALANCE_DIRECTIONS,
     DEFAULT_DIAGONAL_WEIGHT,
-    DEFAULT_FILL_EMPTY,
+    DEFAULT_FILL_PERCENT,
     DEFAULT_FONT_SIZE,
     DEFAULT_FONT_WEIGHT,
     DEFAULT_GRID_COLUMNS,
@@ -52,10 +52,12 @@ from puzzle_portrait.config import (
     DEFAULT_VERTICAL_WEIGHT,
     FONT_WEIGHT_LABELS,
     FONT_WEIGHTS,
+    MAX_FILL_PERCENT,
     MAX_FONT_SIZE,
     MAX_GRID_SIZE,
     MAX_SPREAD_RATE,
     MAX_TILE_SIZE,
+    MIN_FILL_PERCENT,
     MIN_FONT_SIZE,
     MIN_SPREAD_RATE,
     MIN_TILE_SIZE,
@@ -157,8 +159,17 @@ class MainWindow(QMainWindow):
         self.browse_words_button.clicked.connect(self.select_word_list)
 
         self.words_input = QPlainTextEdit()
-        self.words_input.setPlaceholderText("One word per line, or load a .txt file")
+        self.words_input.setPlaceholderText(
+            "One word or phrase per line. Optional: {{row, col}, HOR}"
+        )
         self.words_input.setFixedHeight(120)
+
+        self.unplaced_list = QLabel("All words fit.")
+        self.unplaced_list.setObjectName("unplacedWords")
+        self.unplaced_list.setWordWrap(True)
+        self.unplaced_list.setTextFormat(Qt.TextFormat.PlainText)
+        self.unplaced_report = CollapsibleSection("Could not place")
+        self.unplaced_report.add_widget(self.unplaced_list)
 
         self.colors_input = QComboBox()
         self.colors_input.addItems([str(count) for count in COLOR_COUNTS])
@@ -225,9 +236,11 @@ class MainWindow(QMainWindow):
         self.allow_phrases = QCheckBox("Allow short phrases")
         self.allow_phrases.setChecked(DEFAULT_ALLOW_PHRASES)
         self.allow_phrases.toggled.connect(self._on_mosaic_settings_changed)
-        self.leave_empty_blank = QCheckBox("Leave empty tiles blank")
-        self.leave_empty_blank.setChecked(not DEFAULT_FILL_EMPTY)
-        self.leave_empty_blank.toggled.connect(self._on_mosaic_settings_changed)
+        self.fill_percent = QSpinBox()
+        self.fill_percent.setRange(MIN_FILL_PERCENT, MAX_FILL_PERCENT)
+        self.fill_percent.setValue(DEFAULT_FILL_PERCENT)
+        self.fill_percent.setSuffix(" %")
+        self.fill_percent.valueChanged.connect(self._on_mosaic_settings_changed)
         self.allow_backwards = QCheckBox("Allow backwards words")
         self.allow_backwards.setChecked(DEFAULT_ALLOW_BACKWARDS)
         self.allow_backwards.toggled.connect(self._on_mosaic_settings_changed)
@@ -259,6 +272,7 @@ class MainWindow(QMainWindow):
             self.tile_size,
             self.font_size,
             self.seed,
+            self.fill_percent,
             self.spread_rate,
             self.horizontal_weight,
             self.vertical_weight,
@@ -314,9 +328,14 @@ class MainWindow(QMainWindow):
             labeled_field(
                 "Words",
                 self.words_input,
-                "Entries to hide in the mosaic. One word or phrase per line.",
+                "Entries to hide in the mosaic. One word or phrase per line. "
+                "To pin the first letter, add {{row, col}, DIRECTION} after "
+                "the text. Directions: HOR, VER, DIAG_LB_RU, DIAG_LU_RB. "
+                "Row and column are 0-based from the top-left cell. Lines "
+                "without a pin are placed by the tool.",
             )
         )
+        words_section.add_widget(self.unplaced_report)
         words_section.add_widget(
             checkbox_with_help(
                 self.allow_phrases,
@@ -325,10 +344,11 @@ class MainWindow(QMainWindow):
             )
         )
         words_section.add_widget(
-            checkbox_with_help(
-                self.leave_empty_blank,
-                "When on, leftover tiles stay empty. When off, they are filled "
-                "with random letters.",
+            labeled_field(
+                "Percent of empty tiles to fill",
+                self.fill_percent,
+                "Share of leftover tiles filled with random letters. "
+                "0 leaves them empty. 100 fills all of them.",
             )
         )
 
@@ -586,13 +606,30 @@ class MainWindow(QMainWindow):
 
         title = QLabel("Preview")
         title.setObjectName("panelTitle")
+        self.show_cell_coords = QCheckBox("Show row, col")
+        self.show_cell_coords.setObjectName("showCellCoords")
+        self.show_cell_coords.setToolTip(
+            "When on, hovering a mosaic cell shows its row and column. "
+            "Top-left is 0, 0, matching {{row, col}, DIRECTION} pins."
+        )
+        self.show_cell_coords.toggled.connect(self._on_show_cell_coords)
+
+        header = QWidget()
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.addWidget(title)
+        header_layout.addStretch(1)
+        header_layout.addWidget(self.show_cell_coords)
 
         self.preview_placeholder = FitPreview()
 
         layout = QVBoxLayout(panel)
-        layout.addWidget(title)
+        layout.addWidget(header)
         layout.addWidget(self.preview_placeholder, 1)
         return panel
+
+    def _on_show_cell_coords(self, enabled: bool) -> None:
+        self.preview_placeholder.set_show_cell_hover(enabled)
 
     def select_image(self) -> None:
         QToolTip.hideText()
@@ -856,7 +893,7 @@ class MainWindow(QMainWindow):
         self.spread_words.setChecked(DEFAULT_SPREAD_WORDS)
         self.spread_rate.setValue(DEFAULT_SPREAD_RATE)
         self.allow_phrases.setChecked(DEFAULT_ALLOW_PHRASES)
-        self.leave_empty_blank.setChecked(not DEFAULT_FILL_EMPTY)
+        self.fill_percent.setValue(DEFAULT_FILL_PERCENT)
         self.allow_backwards.setChecked(DEFAULT_ALLOW_BACKWARDS)
         self.balance_directions.setChecked(DEFAULT_BALANCE_DIRECTIONS)
         self.horizontal_weight.setValue(DEFAULT_HORIZONTAL_WEIGHT)
@@ -864,6 +901,8 @@ class MainWindow(QMainWindow):
         self.diagonal_weight.setValue(DEFAULT_DIAGONAL_WEIGHT)
         for section in self.control_sections:
             section.set_expanded(False)
+        self.unplaced_report.set_expanded(False)
+        self._set_unplaced_words(())
         self._updating_crop = False
         self._set_image_controls_enabled(False)
         self.preview_placeholder.clear_preview()
@@ -937,6 +976,14 @@ class MainWindow(QMainWindow):
 
         self._apply_project(settings, folder, image, image_path)
 
+    def _set_unplaced_words(self, failed_words: tuple[str, ...] = ()) -> None:
+        if failed_words:
+            self.unplaced_report.set_title(f"Could not place ({len(failed_words)})")
+            self.unplaced_list.setText("\n".join(failed_words))
+        else:
+            self.unplaced_report.set_title("Could not place")
+            self.unplaced_list.setText("All words fit.")
+
     def _current_words(self) -> list[str]:
         return [
             line.strip()
@@ -979,7 +1026,7 @@ class MainWindow(QMainWindow):
             vertical_weight=self.vertical_weight.value(),
             diagonal_weight=self.diagonal_weight.value(),
             allow_phrases=self.allow_phrases.isChecked(),
-            fill_empty=not self.leave_empty_blank.isChecked(),
+            fill_percent=self.fill_percent.value(),
             allow_backwards=self.allow_backwards.isChecked(),
         )
 
@@ -1024,7 +1071,7 @@ class MainWindow(QMainWindow):
         self.spread_words.setChecked(settings.spread_words)
         self.spread_rate.setValue(settings.spread_rate)
         self.allow_phrases.setChecked(settings.allow_phrases)
-        self.leave_empty_blank.setChecked(not settings.fill_empty)
+        self.fill_percent.setValue(settings.fill_percent)
         self.allow_backwards.setChecked(settings.allow_backwards)
         self.balance_directions.setChecked(settings.balance_directions)
         self.horizontal_weight.setValue(settings.horizontal_weight)
@@ -1048,7 +1095,7 @@ class MainWindow(QMainWindow):
 
     def _word_search(self, columns: int, rows: int) -> WordSearch:
         words = [word.upper() for word in self._current_words()]
-        fill_empty = not self.leave_empty_blank.isChecked()
+        percent = self.fill_percent.value()
         if words:
             return generate_word_search(
                 columns,
@@ -1060,12 +1107,11 @@ class MainWindow(QMainWindow):
                 spread_rate=self.spread_rate.value(),
                 balance_directions=self.balance_directions.isChecked(),
                 direction_weights=self._direction_weights(),
-                fill_empty=fill_empty,
+                fill_percent=percent,
                 allow_phrases=self.allow_phrases.isChecked(),
             )
         grid = LetterGrid(columns, rows)
-        if fill_empty:
-            fill_empty_random(grid, seed=self.seed.value())
+        fill_empty_random(grid, seed=self.seed.value(), percent=percent)
         return WordSearch(grid=grid, placements=(), failed_words=())
 
     def _placement_directions(self):
@@ -1153,7 +1199,7 @@ class MainWindow(QMainWindow):
             balance_directions=self.balance_directions.isChecked(),
             direction_weights=self._direction_weights(),
             directions=self._placement_directions(),
-            fill_empty=not self.leave_empty_blank.isChecked(),
+            fill_percent=self.fill_percent.value(),
             allow_phrases=self.allow_phrases.isChecked(),
             tile_size=self.tile_size.value(),
             font=self._selected_font_path(),
@@ -1195,10 +1241,11 @@ class MainWindow(QMainWindow):
         self._preview_workers.append(worker)
         worker.start()
 
-    def _on_preview_ready(self, image, token: int) -> None:
+    def _on_preview_ready(self, image, token: int, failed_words=()) -> None:
         if token != self._preview_token:
             return
-        self.preview_placeholder.set_source_image(image)
+        self._show_preview_image(image)
+        self._set_unplaced_words(tuple(failed_words or ()))
         if not self._preview_timer.isActive():
             self.preview_placeholder.set_working(False)
 
@@ -1217,11 +1264,17 @@ class MainWindow(QMainWindow):
         if self.source_image is None:
             self.preview_placeholder.set_working(False)
             return
-        combined, _failed = self._combined_grid()
-        self.preview_placeholder.set_source_image(
-            self._render_mosaic(combined, draw_letters=True)
-        )
+        combined, failed = self._combined_grid()
+        self._set_unplaced_words(failed)
+        self._show_preview_image(self._render_mosaic(combined, draw_letters=True))
         self.preview_placeholder.set_working(False)
+
+    def _show_preview_image(self, image) -> None:
+        self.preview_placeholder.set_source_image(
+            image,
+            columns=self.grid_columns.value(),
+            rows=self.grid_rows.value(),
+        )
 
     def _populate_font_input(self) -> None:
         self.font_input.blockSignals(True)

@@ -7,6 +7,7 @@ from puzzle_portrait.wordsearch import (
     LEFT,
     RIGHT,
     UP,
+    UP_RIGHT,
     direction_weights_from_axes,
     distance_from_center,
     generate_word_search,
@@ -81,6 +82,73 @@ def test_generate_reports_words_that_cannot_be_placed() -> None:
     assert "HI" not in puzzle.failed_words
     assert "OK" not in puzzle.failed_words
     assert {placement.word for placement in puzzle.placements} == {"HI", "OK"}
+
+
+def test_generate_places_pinned_words_at_the_given_cell() -> None:
+    puzzle = generate_word_search(
+        16,
+        16,
+        [
+            "HELLO",
+            "WORLD {{2,4}, HOR}",
+            "MY NAME",
+            "IS ABCD {{8,6}, DIAG_LB_RU}",
+            "GOOD",
+        ],
+        directions=(RIGHT, DOWN),
+        seed=3,
+        fill_empty=False,
+        allow_phrases=True,
+    )
+
+    by_word = {placement.word: placement for placement in puzzle.placements}
+    assert puzzle.failed_words == ()
+    assert by_word["WORLD"].row == 2
+    assert by_word["WORLD"].column == 4
+    assert by_word["WORLD"].direction == RIGHT
+    assert _letters_along(puzzle, by_word["WORLD"]) == "WORLD"
+    assert by_word["IS ABCD"].row == 8
+    assert by_word["IS ABCD"].column == 6
+    assert by_word["IS ABCD"].direction == UP_RIGHT
+    assert _letters_along(puzzle, by_word["IS ABCD"]) == "IS ABCD"
+    assert {placement.word for placement in puzzle.placements} == {
+        "HELLO",
+        "WORLD",
+        "MY NAME",
+        "IS ABCD",
+        "GOOD",
+    }
+
+
+def test_generate_reports_pinned_words_that_do_not_fit() -> None:
+    puzzle = generate_word_search(
+        3,
+        3,
+        ["HI {{0,0}, HOR}", "TOOLONG {{0,0}, HOR}"],
+        directions=(RIGHT,),
+        seed=0,
+        fill_empty=False,
+    )
+
+    assert puzzle.failed_words == ("TOOLONG {{0,0}, HOR}",)
+    assert puzzle.placements[0].word == "HI"
+    assert puzzle.grid[0, 0] == "H"
+    assert puzzle.grid[0, 1] == "I"
+
+
+def test_generate_places_pinned_phrase_even_when_phrases_are_off() -> None:
+    puzzle = generate_word_search(
+        12,
+        1,
+        ["IS ABCD {{0,0}, HOR}", "SOMEONE COOL"],
+        directions=(RIGHT,),
+        seed=0,
+        fill_empty=False,
+        allow_phrases=False,
+    )
+
+    assert puzzle.placements[0].word == "IS ABCD"
+    assert puzzle.failed_words == ("SOMEONE COOL",)
 
 
 def test_generate_respects_allowed_directions() -> None:

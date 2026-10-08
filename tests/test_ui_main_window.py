@@ -12,7 +12,7 @@ from puzzle_portrait.config import (
     DEFAULT_ALLOW_PHRASES,
     DEFAULT_CELL_SIZE,
     DEFAULT_COLOR_COUNT,
-    DEFAULT_FILL_EMPTY,
+    DEFAULT_FILL_PERCENT,
     DEFAULT_FONT_SIZE,
     DEFAULT_GRID_COLUMNS,
     DEFAULT_GRID_ROWS,
@@ -77,6 +77,15 @@ def test_main_window_launches_with_controls_and_preview() -> None:
         "Placement",
     ]
     assert all(not section.is_expanded() for section in window.control_sections)
+    assert window.unplaced_report.title() == "Could not place"
+    assert window.unplaced_report.is_expanded() is False
+    assert window.unplaced_list.text() == "All words fit."
+    assert window.fill_percent.minimum() == 0
+    assert window.fill_percent.maximum() == 100
+    assert window.fill_percent.value() == DEFAULT_FILL_PERCENT
+    assert window.show_cell_coords is not None
+    assert window.show_cell_coords.isChecked() is False
+    assert window.preview_placeholder.shows_cell_hover() is False
     tile_helps = [
         icon.help_text()
         for icon in window.findChildren(HelpIcon)
@@ -85,6 +94,25 @@ def test_main_window_launches_with_controls_and_preview() -> None:
     assert tile_helps
     assert "source photo" in tile_helps[0].lower()
 
+    window.close()
+
+
+def test_preview_cell_coord_switch_enables_hover() -> None:
+    app = _app()
+    window = MainWindow()
+    window.resize(800, 500)
+    window.show()
+    app.processEvents()
+    window.load_selected_image(FIXTURE)
+    app.processEvents()
+
+    window.show_cell_coords.setChecked(True)
+    app.processEvents()
+    assert window.preview_placeholder.shows_cell_hover() is True
+    cell = window.preview_placeholder.cell_at(
+        window.preview_placeholder._pixmap_rect().topLeft()
+    )
+    assert cell == (0, 0)
     window.close()
 
 
@@ -474,7 +502,7 @@ def test_save_project_writes_folder_and_reloads(tmp_path: Path) -> None:
     window.spread_words.setChecked(True)
     window.spread_rate.setValue(2.25)
     window.allow_phrases.setChecked(True)
-    window.leave_empty_blank.setChecked(True)
+    window.fill_percent.setValue(0)
     window.allow_backwards.setChecked(True)
     window.balance_directions.setChecked(True)
     window.horizontal_weight.setValue(0.5)
@@ -523,7 +551,7 @@ def test_save_project_writes_folder_and_reloads(tmp_path: Path) -> None:
     assert restored.spread_words.isChecked() is True
     assert restored.spread_rate.value() == 2.25
     assert restored.allow_phrases.isChecked() is True
-    assert restored.leave_empty_blank.isChecked() is True
+    assert restored.fill_percent.value() == 0
     assert restored.allow_backwards.isChecked() is True
     assert restored.balance_directions.isChecked() is True
     assert restored.horizontal_weight.value() == 0.5
@@ -717,7 +745,7 @@ def test_new_discard_clears_image_words_and_preview(monkeypatch) -> None:
     window.words_input.setPlainText("CAT\nDOG")
     window.grid_columns.setValue(8)
     window.allow_phrases.setChecked(True)
-    window.leave_empty_blank.setChecked(True)
+    window.fill_percent.setValue(0)
     window.control_sections[0].set_expanded(True)
     app.processEvents()
 
@@ -738,7 +766,7 @@ def test_new_discard_clears_image_words_and_preview(monkeypatch) -> None:
     assert window.grid_rows.value() == DEFAULT_GRID_ROWS
     assert window.colors_input.currentText() == str(DEFAULT_COLOR_COUNT)
     assert window.allow_phrases.isChecked() is DEFAULT_ALLOW_PHRASES
-    assert window.leave_empty_blank.isChecked() is (not DEFAULT_FILL_EMPTY)
+    assert window.fill_percent.value() == DEFAULT_FILL_PERCENT
     assert window.grid_columns.isEnabled() is False
     assert window.preview_placeholder.source_pixmap.isNull()
     assert window.preview_placeholder.text() == "Preview will appear here"
@@ -834,7 +862,7 @@ def test_phrase_and_empty_tile_switches_change_the_grid() -> None:
     window.grid_columns.setValue(8)
     window.grid_rows.setValue(4)
     window.words_input.setPlainText("HI OK")
-    window.leave_empty_blank.setChecked(True)
+    window.fill_percent.setValue(0)
     window.allow_phrases.setChecked(False)
     app.processEvents()
 
@@ -858,6 +886,46 @@ def test_phrase_and_empty_tile_switches_change_the_grid() -> None:
     window.allow_backwards.setChecked(True)
     app.processEvents()
     assert window._placement_directions() == DIRECTIONS
+    window.close()
+
+
+def test_pinned_word_starts_at_the_given_cell() -> None:
+    app = _app()
+    window = MainWindow()
+    window.show()
+    app.processEvents()
+    window.load_selected_image(FIXTURE)
+    window.grid_columns.setValue(10)
+    window.grid_rows.setValue(10)
+    window.words_input.setPlainText("WORLD {{2,4}, HOR}")
+    window.fill_percent.setValue(0)
+    app.processEvents()
+
+    puzzle = window._word_search(10, 10)
+    assert puzzle.failed_words == ()
+    placement = puzzle.placements[0]
+    assert placement.word == "WORLD"
+    assert placement.row == 2
+    assert placement.column == 4
+    window.close()
+
+
+def test_unplaced_report_lists_words_that_do_not_fit() -> None:
+    app = _app()
+    window = MainWindow()
+    window.show()
+    app.processEvents()
+    window.load_selected_image(FIXTURE)
+    window.grid_columns.setValue(3)
+    window.grid_rows.setValue(3)
+    window.words_input.setPlainText("HI\nTOOLONG")
+    window.fill_percent.setValue(0)
+    app.processEvents()
+    _flush_preview(window)
+
+    assert window.unplaced_report.title() == "Could not place (1)"
+    assert "TOOLONG" in window.unplaced_list.text()
+    assert "HI" not in window.unplaced_list.text().splitlines()
     window.close()
 
 

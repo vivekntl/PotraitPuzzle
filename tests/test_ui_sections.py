@@ -32,6 +32,8 @@ def test_section_starts_collapsed_and_can_expand() -> None:
     section.set_expanded(True)
     assert section.is_expanded() is True
     assert section._body.isHidden() is False
+    section.set_title("Could not place (2)")
+    assert section.title() == "Could not place (2)"
 
 
 def test_labeled_field_puts_title_above_the_control() -> None:

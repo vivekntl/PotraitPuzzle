@@ -24,7 +24,7 @@ def test_render_preview_builds_a_lettered_mosaic() -> None:
         balance_directions=False,
         direction_weights=None,
         directions=FORWARD_DIRECTIONS,
-        fill_empty=False,
+        fill_percent=0,
         allow_phrases=False,
         tile_size=10,
         font=None,
@@ -34,6 +34,7 @@ def test_render_preview_builds_a_lettered_mosaic() -> None:
         text_color=RGB(0, 0, 0),
     )
 
-    image = render_preview(load_image(FIXTURE), settings)
+    result = render_preview(load_image(FIXTURE), settings)
 
-    assert image.size == (60, 40)
+    assert result.image.size == (60, 40)
+    assert result.failed_words == ()
